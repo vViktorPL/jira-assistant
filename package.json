@@ -1,0 +1,29 @@
+{
+  "name": "jira-assistant",
+  "version": "0.0.1",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "ts-node ./src/index.ts > worklog.csv",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vViktorPL/jira-assistant.git"
+  },
+  "author": "Wiktor Toporek <wtoporek@gmail.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/vViktorPL/jira-assistant/issues"
+  },
+  "homepage": "https://github.com/vViktorPL/jira-assistant#readme",
+  "dependencies": {
+    "csv-stringify": "^6.2.4",
+    "dotenv": "^16.0.3",
+    "jira.js": "^2.16.0"
+  },
+  "devDependencies": {
+    "promise-throttle": "^1.1.2",
+    "ts-node": "^10.9.1"
+  }
+}
