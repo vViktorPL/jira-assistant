@@ -61,7 +61,7 @@ async function getMyWorklogsSince(date: Date, mode: WorklogMode) {
         promiseThrottle.add(() =>
           jiraClient.issueWorklogs.getIssueWorklog({
           issueIdOrKey: key,
-          startedAfter: Math.floor(+date / 1000),
+          startedAfter: +date,
         }))
     )
   );
