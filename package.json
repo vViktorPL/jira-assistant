@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "ts-node ./src/index.ts > worklog.csv",
+    "start": "ts-node ./src/index.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -18,11 +18,14 @@
   },
   "homepage": "https://github.com/vViktorPL/jira-assistant#readme",
   "dependencies": {
-    "csv-stringify": "^6.2.4",
     "dotenv": "^16.0.3",
+    "html-escaper": "^3.0.3",
+    "html-pdf-node": "^1.0.7",
     "jira.js": "^2.16.0"
   },
   "devDependencies": {
+    "@types/html-escaper": "^3.0.0",
+    "@types/html-pdf-node": "^1.0.0",
     "promise-throttle": "^1.1.2",
     "ts-node": "^10.9.1"
   }

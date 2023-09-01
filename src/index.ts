@@ -1,12 +1,15 @@
 import { Version3Client, Version3Models } from 'jira.js'
 import { default as PromiseThrottle } from 'promise-throttle'
-import { stringify } from 'csv-stringify/sync'
+import { generatePdf } from 'html-pdf-node';
+import { escape } from 'html-escaper'
+import * as fs from 'fs';
 import * as dotenv from 'dotenv'
 dotenv.config()
 
 const email = process.env.JIRA_USER_EMAIL;
 const jiraPersonalAccessToken = process.env.JIRA_PERSONAL_ACCESS_TOKEN;
 const jiraHost = process.env.JIRA_HOST_URL;
+const title = process.env.DOCUMENT_TITLE;
 
 if (!email) {
   throw new Error('No JIRA user email provided');
@@ -33,7 +36,7 @@ enum WorklogMode {
   DailySummary,
 }
 
-async function getMyWorklogsSince(date: Date, mode: WorklogMode) {
+async function getMyWorklogsSince(date: Date, mode: WorklogMode): Promise<(string | number)[][]> {
   const worklogDate = date.toJSON().split('T')[0];
 
   const issuesSearchResponse = await jiraClient.issueSearch.searchForIssuesUsingJql({
@@ -43,7 +46,7 @@ async function getMyWorklogsSince(date: Date, mode: WorklogMode) {
   });
 
   if (!issuesSearchResponse.issues) {
-    return;
+    return [];
   }
 
   const issueByIdMap = new Map<string, Version3Models.Issue>();
@@ -73,9 +76,11 @@ async function getMyWorklogsSince(date: Date, mode: WorklogMode) {
         started: worklog.started!,
         issue: issueByIdMap.get(worklog.issueId!)!.key,
         timeSpentInHours: (worklog.timeSpentSeconds ?? 0) / 3600,
-        comment: worklog.comment && extractTextFromJiraDocumentNode(worklog.comment),
+        comment: (worklog.comment && extractTextFromJiraDocumentNode(worklog.comment)) ?? '',
       }))
   ).sort((worklogA, worklogB) => +new Date(worklogA.started) - +new Date(worklogB.started))
+
+  const hoursSum = worklogs.reduce((sum, worklog) => sum + worklog.timeSpentInHours, 0).toString().replace('.', ',');
 
   switch (mode) {
     case WorklogMode.Detailed: {
@@ -88,9 +93,9 @@ async function getMyWorklogsSince(date: Date, mode: WorklogMode) {
         ]
       );
 
-      console.log('Date,Issue,Hours spent,Comment');
-      console.log(stringify(csvEntries));
-      break;
+      return [['Date', 'Issue', 'Hours spent', 'Comment'], ...csvEntries, ['Total', '', hoursSum, '']];
+      // console.log('Date,Issue,Hours spent,Comment');
+      // console.log(stringify(csvEntries));
     }
 
     case WorklogMode.DailySummary: {
@@ -118,15 +123,80 @@ async function getMyWorklogsSince(date: Date, mode: WorklogMode) {
           day, dailySummary.timeSpentInHours, dailySummary.issues.join(', ')
         ]
       );
-      console.log("Date,Hours,Issues");
-      console.log(stringify(csvEntries));
-      break;
+
+      return [['Date', 'Hours spent', 'Issues'], ...csvEntries, ['Total', hoursSum, '']];
+      // console.log("Date,Hours,Issues");
+      // console.log(stringify(csvEntries));
+      // break;
     }
   }
 }
 
-getMyWorklogsSince(new Date('2023-02-01'), WorklogMode.Detailed);
+const firstDayOfCurrentMonth = new Date();
+firstDayOfCurrentMonth.setDate(1);
+firstDayOfCurrentMonth.setHours(0, 0, 0, 0);
 
+const firstDayOfPreviousMonth = new Date(firstDayOfCurrentMonth);
+firstDayOfPreviousMonth.setMonth(firstDayOfCurrentMonth.getMonth() - 1);
+
+(async () => {
+  const currentDate = new Date();
+  const reportDate = currentDate.getDate() > 15 ? firstDayOfCurrentMonth : firstDayOfPreviousMonth;
+
+  const entries = await getMyWorklogsSince(reportDate, WorklogMode.DailySummary);
+
+  const content = `
+    <style>
+      html { -webkit-print-color-adjust: exact; }
+      
+      body {
+        margin: 1.5em 2.5em;
+      }
+    
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      
+      table, td, th {
+        border: solid 1px;
+      }
+
+      tr:last-child {
+        background: lightgray;
+        font-weight: bold;
+      }
+      
+      tr:last-child td {
+        border-top-width: 2px;
+      }
+    </style>
+
+    <h1>${title ? `${escape(title)} - ` : ''}${reportDate.toLocaleDateString('pl', {
+    year: "numeric",
+    month: "long",
+  })}</h1><table>${entries.map(
+    (entry, rowIndex) => (`<tr>${
+      entry.map(cell => rowIndex === 0 ? `<th>${escape(String(cell))}</th>` : `<td>${escape(String(cell))}</td>`).join('')
+    }</tr>`)
+  ).join('\n')}</table>`;
+
+
+  generatePdf({
+    content
+  }, {}, (err, buffer) => {
+    if (err) {
+      console.error(err);
+      return;
+    }
+
+    fs.writeFile('worklog.pdf', buffer, err => {
+      if (err) {
+        console.error(err);
+      }
+    })
+  });
+})();
 
 const extractTextFromJiraDocumentNode = (documentNode: Version3Models.Document | Omit<Version3Models.Document, 'version'>): string => {
   const contentsText = (documentNode.content ?? [])
