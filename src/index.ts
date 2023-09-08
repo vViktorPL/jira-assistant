@@ -36,11 +36,11 @@ enum WorklogMode {
   DailySummary,
 }
 
-async function getMyWorklogsSince(date: Date, mode: WorklogMode): Promise<(string | number)[][]> {
-  const worklogDate = date.toJSON().split('T')[0];
+async function getMyWorklogsForPeriod(fromDate: Date, toDate: Date, mode: WorklogMode): Promise<(string | number)[][]> {
+  const worklogDateRange = [fromDate, toDate].map(date => date.toJSON().split('T')[0]);
 
   const issuesSearchResponse = await jiraClient.issueSearch.searchForIssuesUsingJql({
-    jql: `worklogDate >= \'${worklogDate}\' AND worklogAuthor = currentUser()`,
+    jql: `worklogDate >= \'${worklogDateRange[0]}\' AND worklogDate <= \'${worklogDateRange[1]}\' AND worklogAuthor = currentUser()`,
     fields: ['id'],
     maxResults: 100,
   });
@@ -64,7 +64,7 @@ async function getMyWorklogsSince(date: Date, mode: WorklogMode): Promise<(strin
         promiseThrottle.add(() =>
           jiraClient.issueWorklogs.getIssueWorklog({
           issueIdOrKey: key,
-          startedAfter: +date,
+          startedAfter: +fromDate,
         }))
     )
   );
@@ -139,11 +139,19 @@ firstDayOfCurrentMonth.setHours(0, 0, 0, 0);
 const firstDayOfPreviousMonth = new Date(firstDayOfCurrentMonth);
 firstDayOfPreviousMonth.setMonth(firstDayOfCurrentMonth.getMonth() - 1);
 
+const getLastDayOfMonth = (date: Date) => {
+  const result = new Date(date);
+  result.setMonth(result.getMonth() + 1);
+  result.setDate(0);
+
+  return result;
+}
+
 (async () => {
   const currentDate = new Date();
-  const reportDate = currentDate.getDate() > 15 ? firstDayOfCurrentMonth : firstDayOfPreviousMonth;
-
-  const entries = await getMyWorklogsSince(reportDate, WorklogMode.DailySummary);
+  const reportDateStart = currentDate.getDate() > 15 ? firstDayOfCurrentMonth : firstDayOfPreviousMonth;
+  const reportDateEnd = getLastDayOfMonth(reportDateStart);
+  const entries = await getMyWorklogsForPeriod(reportDateStart, reportDateEnd, WorklogMode.DailySummary);
 
   const content = `
     <style>
@@ -172,7 +180,7 @@ firstDayOfPreviousMonth.setMonth(firstDayOfCurrentMonth.getMonth() - 1);
       }
     </style>
 
-    <h1>${title ? `${escape(title)} - ` : ''}${reportDate.toLocaleDateString('pl', {
+    <h1>${title ? `${escape(title)} - ` : ''}${reportDateStart.toLocaleDateString('pl', {
     year: "numeric",
     month: "long",
   })}</h1><table>${entries.map(
