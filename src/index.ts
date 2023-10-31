@@ -37,7 +37,9 @@ enum WorklogMode {
 }
 
 async function getMyWorklogsForPeriod(fromDate: Date, toDate: Date, mode: WorklogMode): Promise<(string | number)[][]> {
-  const worklogDateRange = [fromDate, toDate].map(date => date.toJSON().split('T')[0]);
+  const worklogDateRange = [fromDate, toDate].map(dateFormat);
+
+  console.log(`Exporting worklogs between ${worklogDateRange[0]} - ${worklogDateRange[1]}`)
 
   const issuesSearchResponse = await jiraClient.issueSearch.searchForIssuesUsingJql({
     jql: `worklogDate >= \'${worklogDateRange[0]}\' AND worklogDate <= \'${worklogDateRange[1]}\' AND worklogAuthor = currentUser()`,
@@ -71,7 +73,7 @@ async function getMyWorklogsForPeriod(fromDate: Date, toDate: Date, mode: Worklo
 
   const worklogs = worklogsPerIssue.flatMap(
     worklogResponse => worklogResponse.worklogs
-      .filter((worklog) => worklog.author?.emailAddress === email)
+      .filter((worklog) => worklog.author?.emailAddress === email && worklog.started)
       .map((worklog) => ({
         started: worklog.started!,
         issue: issueByIdMap.get(worklog.issueId!)!.key,
@@ -140,12 +142,10 @@ const firstDayOfPreviousMonth = new Date(firstDayOfCurrentMonth);
 firstDayOfPreviousMonth.setMonth(firstDayOfCurrentMonth.getMonth() - 1);
 
 const getLastDayOfMonth = (date: Date) => {
-  const result = new Date(date);
-  result.setMonth(result.getMonth() + 1);
-  result.setDate(0);
-
-  return result;
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0);
 }
+
+const dateFormat = (date: Date) => `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
 
 (async () => {
   const currentDate = new Date();
